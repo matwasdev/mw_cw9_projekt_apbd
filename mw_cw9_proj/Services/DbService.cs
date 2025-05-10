@@ -1,23 +1,25 @@
 ﻿using System.Data;
-using System.Data.Common;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using mw_cw9_proj.Exceptions;
 using mw_cw9_proj.Models.DTOs;
 
 namespace mw_cw9_proj.Services;
 
-public class WarehousesService : IWarehousesService
+public class DbService : IDbService
 {
-    private readonly string _connectionString =
-        "Data Source=db-mssql;Initial Catalog=2019SBD;Integrated Security=True;Encrypt=False;";
+    private readonly string _connectionString;
 
-    public async Task<int> CreateProductWarehouse(CreateProductWarehouseDTO createProductWarehouseDTO)
+    public DbService(IConfiguration configuration)
     {
-
+        _connectionString = configuration.GetConnectionString("Default") ?? String.Empty;
+    }
+    
+    
+    public async Task<int> CreateProductWarehouseAsync(CreateProductWarehouseDTO createProductWarehouseDTO)
+    {
         string checkQuery =
             @"SELECT 1 WHERE Exists(SELECT 1 FROM PRODUCT WHERE IdProduct=@IdProduct) AND Exists(SELECT 1 FROM WAREHOUSE WHERE IdWarehouse=@IdWarehouse)";
-
-
+        
 
         using (var sqlConnection = new SqlConnection(_connectionString))
         {
@@ -33,13 +35,13 @@ public class WarehousesService : IWarehousesService
                 checkCommand.Parameters.AddWithValue("@IdWarehouse", createProductWarehouseDTO.IdWarehouse);
 
                 if (createProductWarehouseDTO.Amount <= 0)
-                    throw new InvalidAmountException();
+                    throw new BadRequestException("Amount must be greater than 0");
 
                 using (var reader = await checkCommand.ExecuteReaderAsync())
                 {
                     if (!await reader.ReadAsync())
                     {
-                        throw new InvalidIdException();
+                        throw new NotFoundException("Product or Warehouse not found");
                     }
                 }
             }
@@ -58,7 +60,7 @@ public class WarehousesService : IWarehousesService
                 {
                     if (!await reader.ReadAsync())
                     {
-                        throw new OrderNotFoundException();
+                        throw new NotFoundException("A proper order not found");
                     }
 
                     idOrder = reader.GetInt32(0);
@@ -75,7 +77,7 @@ public class WarehousesService : IWarehousesService
                 {
                     if (await reader.ReadAsync())
                     {
-                        throw new OrderAlreadyRealizedException();
+                        throw new ConflictException("This order was already realised");
                     }
                 }
             }
@@ -135,7 +137,7 @@ public class WarehousesService : IWarehousesService
                 }
                 catch (Exception e)
                 {
-                    transaction.Rollback();
+                    await transaction.RollbackAsync();
                     throw;
                 }
             }
@@ -143,7 +145,7 @@ public class WarehousesService : IWarehousesService
     }
 
 
-    public async Task<int> CreateProductWarehouseWithProcedure(CreateProductWarehouseDTO createProductWarehouseDTO)
+    public async Task<int> CreateProductWarehouseWithProcedureAsync(CreateProductWarehouseDTO createProductWarehouseDTO)
     {
         using (var sqlConnection = new SqlConnection(_connectionString))
         {

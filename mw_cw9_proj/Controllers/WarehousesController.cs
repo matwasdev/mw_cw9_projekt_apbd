@@ -11,11 +11,11 @@ namespace mw_cw9_proj.Controllers;
 public class WarehousesController : ControllerBase
 {
 
-    private readonly IWarehousesService _warehousesService;
+    private readonly IDbService _dbService;
 
-    public WarehousesController(IWarehousesService warehousesService)
+    public WarehousesController(IDbService dbService)
     {
-        _warehousesService = warehousesService;
+        _dbService = dbService;
     }
 
     [HttpPost]
@@ -23,27 +23,24 @@ public class WarehousesController : ControllerBase
     {
         try
         {
-            int generatedId = await _warehousesService.CreateProductWarehouse(createProductWarehouseDTO);
+            int generatedId = await _dbService.CreateProductWarehouseAsync(createProductWarehouseDTO);
             return Ok(generatedId);
         }
-        catch (InvalidAmountException)
+        catch (NotFoundException e)
         {
-            return BadRequest("Invalid amount (cannot be less or equal 0)");
+            return NotFound(e.Message);
         }
-        catch (InvalidIdException)
+        catch (BadRequestException e)
         {
-            return NotFound("IdProduct or IdWarehouse could not be found");
+            return BadRequest(e.Message);
         }
-        catch (OrderNotFoundException)
+        catch (ConflictException e)
         {
-            return NotFound("A proper order to realize could not be found");
-        }
-        catch (OrderAlreadyRealizedException)
-        {
-            return BadRequest("This order is already realized");
+            return Conflict(e.Message);
         }
         catch (Exception e)
         {
+            Console.WriteLine(e);
             return StatusCode(500, "Internal Server Error occured");
         }
     }
@@ -53,10 +50,10 @@ public class WarehousesController : ControllerBase
     {
         try
         {
-            int generatedId = await _warehousesService.CreateProductWarehouseWithProcedure(createProductWarehouseDTO);
+            int generatedId = await _dbService.CreateProductWarehouseWithProcedureAsync(createProductWarehouseDTO);
             return Ok(generatedId);
         }
-        catch (SqlException e)
+        catch (Exception e)
         {
             Console.WriteLine(e.Message);
             if (e.Message.Contains("IdProduct"))
@@ -64,16 +61,12 @@ public class WarehousesController : ControllerBase
 
             if (e.Message.Contains("IdWarehouse"))
                 return NotFound("IdWarehouse could not be found");
+            
+            if (e.Message.Contains("no order to fulfill"))
+                return BadRequest("No order to fulfill");
 
-            if (e.Message.Contains("no order"))
-                return NotFound("A proper order could not be found");
 
             return StatusCode(500, "Database error occurred");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.Message);
-            return StatusCode(500, "Internal Server Error occured");
         }
     }
 
